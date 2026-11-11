@@ -188,7 +188,7 @@
     <h2 class="ptitle" id="pTitle"></h2>
     <div class="prob" id="pProb"></div>
 
-    <div class="sec">✏️ 解答スペース（指やペンで手書きできます。下まで書くと自動で広がります。左右のはしの点々の帯は、画面をスクロールするための場所です）</div>
+    <div class="sec">✏️ 解答スペース（指やペンで手書きできます。下まで書くと自動で広がります。端の点々の帯はスクロール用で、付ける側は下のボタンで切り替えられます）</div>
     <div class="canvaswrap"><canvas id="draw"></canvas><div class="scrollstrip left" title="スクロール用（書けません）"></div><div class="scrollstrip right" title="スクロール用（書けません）"></div></div>
     <div class="tools">
       <button class="tbtn on" id="penBtn">✒️ ペン</button>
@@ -196,6 +196,7 @@
       <button class="tbtn" id="undoBtn">↩️ 元に戻す</button>
       <button class="tbtn" id="clearBtn">🗑 全消し</button>
       <button class="tbtn" id="extendBtn">⬇ スペースを広げる</button>
+      <button class="tbtn" id="stripSideBtn">↔ スクロール帯：右</button>
     </div>
     <div class="spacenote hidden" id="spaceNote">スペースはここまでです（いちばん下まで広げました）。</div>
 
@@ -665,6 +666,18 @@ document.getElementById("clearBtn").onclick = ()=>{
   saveDrawing();
 };
 document.getElementById("extendBtn").onclick = ()=>{ extendCanvas(); };
+/* スクロール帯は片側だけ。付ける側は保存され、ボタンで切り替える */
+let stripSide = store.stripSide === "left" ? "left" : "right";
+function applyStripSide(){
+  document.querySelector(".scrollstrip.left").style.display = stripSide === "left" ? "block" : "none";
+  document.querySelector(".scrollstrip.right").style.display = stripSide === "right" ? "block" : "none";
+  document.getElementById("stripSideBtn").textContent = "↔ スクロール帯：" + (stripSide === "right" ? "右" : "左");
+}
+applyStripSide();
+document.getElementById("stripSideBtn").onclick = ()=>{
+  stripSide = stripSide === "right" ? "left" : "right";
+  store.stripSide = stripSide; save(); applyStripSide();
+};
 
 function normAns(s){
   if(s == null) return "";
