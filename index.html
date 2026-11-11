@@ -57,7 +57,13 @@
     padding:16px; font-size:16.5px; white-space:pre-wrap; margin:10px 0;
   }
   .sec{font-size:13px; font-weight:700; color:var(--muted); letter-spacing:.06em; margin:18px 0 6px;}
-  .canvaswrap{background:#fff; border:1.5px solid var(--line); border-radius:12px; overflow:hidden;}
+  .canvaswrap{background:#fff; border:1.5px solid var(--line); border-radius:12px; overflow:hidden; position:relative;}
+.scrollstrip{position:absolute; top:0; bottom:0; width:24px; z-index:3; touch-action:pan-y; cursor:grab;
+  background-color:rgba(20,101,90,.07);
+  background-image:radial-gradient(circle, rgba(20,101,90,.5) 2.2px, transparent 2.7px);
+  background-size:24px 22px; background-position:center 8px; background-repeat:repeat-y;}
+.scrollstrip.left{left:0; border-right:1px dashed rgba(20,101,90,.35);}
+.scrollstrip.right{right:0; border-left:1px dashed rgba(20,101,90,.35);}
   canvas#draw{width:100%; height:300px; display:block; touch-action:none; cursor:crosshair;
     background-image:linear-gradient(#f3ecdc 1px, transparent 1px), linear-gradient(90deg, #f3ecdc 1px, transparent 1px); background-size:24px 24px;}
   .tools{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
@@ -182,8 +188,8 @@
     <h2 class="ptitle" id="pTitle"></h2>
     <div class="prob" id="pProb"></div>
 
-    <div class="sec">✏️ 解答スペース（指やペンで手書きできます。下まで書くと自動で広がります）</div>
-    <div class="canvaswrap"><canvas id="draw"></canvas></div>
+    <div class="sec">✏️ 解答スペース（指やペンで手書きできます。下まで書くと自動で広がります。左右のはしの点々の帯は、画面をスクロールするための場所です）</div>
+    <div class="canvaswrap"><canvas id="draw"></canvas><div class="scrollstrip left" title="スクロール用（書けません）"></div><div class="scrollstrip right" title="スクロール用（書けません）"></div></div>
     <div class="tools">
       <button class="tbtn on" id="penBtn">✒️ ペン</button>
       <button class="tbtn" id="eraserBtn">🧽 消しゴム</button>
