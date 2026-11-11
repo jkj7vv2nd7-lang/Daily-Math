@@ -57,14 +57,21 @@
     padding:16px; font-size:16.5px; white-space:pre-wrap; margin:10px 0;
   }
   .sec{font-size:13px; font-weight:700; color:var(--muted); letter-spacing:.06em; margin:18px 0 6px;}
-  .canvaswrap{background:#fff; border:1.5px solid var(--line); border-radius:12px; overflow:hidden; position:relative;}
-.scrollstrip{position:absolute; top:0; bottom:0; width:24px; z-index:3; touch-action:pan-y; cursor:grab;
+  .padbox{position:relative;}
+.canvaswrap{background:#fff; border:1.5px solid var(--line); border-radius:12px; overflow-x:auto; overflow-y:hidden; position:relative; scrollbar-width:thin;}
+.scrollstrip{position:absolute; top:24px; bottom:24px; width:24px; z-index:4; touch-action:pan-y; cursor:grab;
   background-color:rgba(20,101,90,.07);
   background-image:radial-gradient(circle, rgba(20,101,90,.5) 2.2px, transparent 2.7px);
   background-size:24px 22px; background-position:center 8px; background-repeat:repeat-y;}
 .scrollstrip.left{left:0; border-right:1px dashed rgba(20,101,90,.35);}
 .scrollstrip.right{right:0; border-left:1px dashed rgba(20,101,90,.35);}
-  canvas#draw{width:100%; height:300px; display:block; touch-action:none; cursor:crosshair;
+.hstrip{position:absolute; left:0; height:24px; z-index:3; touch-action:pan-x pan-y; cursor:grab;
+  background-color:rgba(20,101,90,.07);
+  background-image:radial-gradient(circle, rgba(20,101,90,.5) 2.2px, transparent 2.7px);
+  background-size:22px 24px; background-position:8px center; background-repeat:repeat-x;}
+.hstrip.top{top:0; border-bottom:1px dashed rgba(20,101,90,.35);}
+.hstrip.bottom{bottom:0; border-top:1px dashed rgba(20,101,90,.35);}
+  canvas#draw{height:300px; display:block; touch-action:none; cursor:crosshair;
     background-image:linear-gradient(#f3ecdc 1px, transparent 1px), linear-gradient(90deg, #f3ecdc 1px, transparent 1px); background-size:24px 24px;}
   .tools{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
   .spacenote{font-size:12.5px; color:var(--muted); margin-top:6px;}
@@ -188,8 +195,8 @@
     <h2 class="ptitle" id="pTitle"></h2>
     <div class="prob" id="pProb"></div>
 
-    <div class="sec">✏️ 解答スペース（指やペンで手書きできます。下まで書くと自動で広がります。端の点々の帯はスクロール用で、付ける側は下のボタンで切り替えられます）</div>
-    <div class="canvaswrap"><canvas id="draw"></canvas><div class="scrollstrip left" title="スクロール用（書けません）"></div><div class="scrollstrip right" title="スクロール用（書けません）"></div></div>
+    <div class="sec">✏️ 解答スペース（指やペンで手書きできます。端まで書くと自動で広がります。点々の帯は、触って動かすための場所です）</div>
+    <div class="padbox"><div class="canvaswrap"><canvas id="draw"></canvas><div class="hstrip top" title="左右へ移動（書けません）"></div><div class="hstrip bottom" title="左右へ移動（書けません）"></div></div><div class="scrollstrip left" title="スクロール用（書けません）"></div><div class="scrollstrip right" title="スクロール用（書けません）"></div></div>
     <div class="tools">
       <button class="tbtn on" id="penBtn">✒️ ペン</button>
       <button class="tbtn" id="eraserBtn">🧽 消しゴム</button>
@@ -197,6 +204,7 @@
       <button class="tbtn" id="clearBtn">🗑 全消し</button>
       <button class="tbtn" id="extendBtn">⬇ スペースを広げる</button>
       <button class="tbtn" id="stripSideBtn">↔ スクロール帯：右</button>
+      <button class="tbtn" id="homeBtn">⌖ 書き始めに戻る</button>
     </div>
     <div class="spacenote hidden" id="spaceNote">スペースはここまでです（いちばん下まで広げました）。</div>
 
@@ -570,24 +578,35 @@ let drawing = false, lastPt = null, tool = "pen", undoStack = [];
 /* 解答スペースは下へ伸びる方式：初期300px、書くほどに自動で広がり、上限1800px */
 const CANVAS_MIN = 300, CANVAS_MAX = 1800;
 let canvasH = CANVAS_MIN;
-function sizeCanvas(cssH, keepImg, keepCssH, onDone){
-  const r = canvas.getBoundingClientRect();
+let canvasW = 0;   /* 解答スペースの横幅（CSS px）。最初は表示幅、左右へ自動拡張する */
+let originX = 0;   /* 左へ広げた累計（CSS px）＝書き始め位置 */
+const wrapEl = canvas.parentElement;
+function viewW(){ return wrapEl.clientWidth || 360; }
+function maxCanvasW(){ return Math.round(viewW() * 3); }
+function sizeCanvasWH(cssW, cssH, keepImg, keepCssW, keepCssH, keepDX, onDone){
   const dpr = window.devicePixelRatio || 1;
+  canvasW = Math.max(viewW(), Math.min(maxCanvasW(), Math.round(cssW)));
   canvasH = Math.max(CANVAS_MIN, Math.min(CANVAS_MAX, Math.round(cssH)));
+  canvas.style.width = canvasW + "px";
   canvas.style.height = canvasH + "px";
-  canvas.width = Math.round(r.width * dpr);
+  canvas.width = Math.round(canvasW * dpr);
   canvas.height = Math.round(canvasH * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.lineCap = "round"; ctx.lineJoin = "round";
+  document.querySelectorAll(".hstrip").forEach(el => { el.style.width = canvasW + "px"; });
   document.getElementById("spaceNote").classList.toggle("hidden", canvasH < CANVAS_MAX);
   if(keepImg){
     const img = new Image();
-    img.onload = ()=>{ ctx.drawImage(img, 0, 0, r.width, keepCssH || canvasH); if(onDone) onDone(); };
+    img.onload = ()=>{ ctx.drawImage(img, keepDX || 0, 0, keepCssW || canvasW, keepCssH || canvasH); if(onDone) onDone(); };
     img.src = keepImg;
   } else if(onDone) onDone();
 }
+function sizeCanvas(cssH, keepImg, keepCssH, onDone){
+  sizeCanvasWH(canvasW || viewW(), cssH, keepImg, canvasW || viewW(), keepCssH, 0, onDone);
+}
 function fitCanvas(restore){
-  sizeCanvas(CANVAS_MIN, restore ? canvas.toDataURL() : null, CANVAS_MIN);
+  canvasW = viewW(); originX = 0; wrapEl.scrollLeft = 0;
+  sizeCanvasWH(canvasW, CANVAS_MIN, restore ? canvas.toDataURL() : null, canvasW, CANVAS_MIN, 0);
 }
 function extendCanvas(){
   if(canvasH >= CANVAS_MAX){
@@ -597,7 +616,7 @@ function extendCanvas(){
   const step = Math.max(240, Math.round(window.innerHeight * 0.6));
   const keep = canvas.toDataURL();
   const oldH = canvasH;
-  sizeCanvas(canvasH + step, keep, oldH);
+  sizeCanvasWH(canvasW, canvasH + step, keep, canvasW, oldH, 0);
   /* 広がった分が見えるよう、キャンバスの下端が画面内に来るまでなめらかにスクロール */
   requestAnimationFrame(()=>{
     const r = canvas.getBoundingClientRect();
@@ -605,12 +624,28 @@ function extendCanvas(){
   });
   return true;
 }
+/* 左右への自動拡張。左へ広げるときは既存の筆跡が画面上でずれないよう、座標と表示位置をずらす */
+function extendSide(dir){
+  const room = maxCanvasW() - canvasW;
+  if(room <= 0) return 0;
+  const add = Math.min(Math.round(viewW() * 0.6), room);
+  const keep = canvas.toDataURL();
+  const oldW = canvasW, oldH = canvasH;
+  if(dir === "left"){
+    originX += add;
+    sizeCanvasWH(canvasW + add, canvasH, keep, oldW, oldH, add);
+    wrapEl.scrollLeft += add;
+    return add;
+  }
+  sizeCanvasWH(canvasW + add, canvasH, keep, oldW, oldH, 0);
+  return add;
+}
 function canvasPos(e){
   const r = canvas.getBoundingClientRect();
   return { x: e.clientX - r.left, y: e.clientY - r.top };
 }
 function pushUndo(){
-  undoStack.push({ url: canvas.toDataURL(), h: canvasH });
+  undoStack.push({ url: canvas.toDataURL(), h: canvasH, w: canvasW, ox: originX });
   if(undoStack.length > 25) undoStack.shift();
 }
 function saveDrawing(){
@@ -625,6 +660,7 @@ function saveDrawing(){
     tctx.fillStyle = "#ffffff"; tctx.fillRect(0, 0, tmp.width, tmp.height);
     tctx.drawImage(canvas, 0, 0, tmp.width, tmp.height);
     rec.drawing = tmp.toDataURL("image/jpeg", 0.62);
+    rec.cw = canvasW; rec.ch = canvasH; rec.ox = originX;
   }catch(e){ rec.drawing = null; }
   save();
 }
@@ -650,6 +686,9 @@ canvas.addEventListener("pointermove", e=>{
   lastPt = pt;
   /* 筆跡が下端に近づいたら、スペースを下へ広げる */
   if(pt.y > canvasH - 48) extendCanvas();
+  /* 筆跡が左右の端に近づいたら、スペースを横へ広げる（左は筆跡がずれないよう座標をずらす） */
+  if(pt.x > canvasW - 48) extendSide("right");
+  else if(pt.x < 48){ const added = extendSide("left"); if(added) lastPt.x += added; }
 });
 ["pointerup", "pointercancel"].forEach(ev => canvas.addEventListener(ev, ()=>{ if(drawing){ drawing = false; saveDrawing(); } }));
 document.getElementById("penBtn").onclick = ()=>{ tool = "pen"; document.getElementById("penBtn").classList.add("on"); document.getElementById("eraserBtn").classList.remove("on"); };
@@ -657,7 +696,9 @@ document.getElementById("eraserBtn").onclick = ()=>{ tool = "eraser"; document.g
 document.getElementById("undoBtn").onclick = ()=>{
   const prev = undoStack.pop();
   if(!prev) return;
-  sizeCanvas(prev.h, prev.url, prev.h, saveDrawing);
+  originX = prev.ox || 0;
+  sizeCanvasWH(prev.w || viewW(), prev.h, prev.url, prev.w || viewW(), prev.h, 0, saveDrawing);
+  wrapEl.scrollLeft = originX;
 };
 document.getElementById("clearBtn").onclick = ()=>{
   pushUndo();
@@ -666,6 +707,7 @@ document.getElementById("clearBtn").onclick = ()=>{
   saveDrawing();
 };
 document.getElementById("extendBtn").onclick = ()=>{ extendCanvas(); };
+document.getElementById("homeBtn").onclick = ()=>{ wrapEl.scrollTo({ left: originX, behavior: "smooth" }); };
 /* スクロール帯は片側だけ。付ける側は保存され、ボタンで切り替える */
 let stripSide = store.stripSide === "left" ? "left" : "right";
 function applyStripSide(){
@@ -726,9 +768,16 @@ function openProblem(catKey){
       const r = canvas.getBoundingClientRect();
       const img = new Image();
       img.onload = ()=>{
-        /* 保存画像の縦横比から、書いたときの高さを復元する（つぶさない） */
-        const h = Math.max(CANVAS_MIN, Math.min(CANVAS_MAX, Math.round(r.width * img.height / img.width)));
-        sizeCanvas(h, rec.drawing, h);
+        if(rec.cw){
+          /* 保存時の幅・高さ・書き始め位置をそのまま復元する */
+          sizeCanvasWH(rec.cw, rec.ch || CANVAS_MIN, rec.drawing, rec.cw, rec.ch || CANVAS_MIN, 0);
+          originX = rec.ox || 0;
+          requestAnimationFrame(()=>{ wrapEl.scrollLeft = originX; });
+        } else {
+          /* 保存画像の縦横比から、書いたときの高さを復元する（つぶさない） */
+          const h = Math.max(CANVAS_MIN, Math.min(CANVAS_MAX, Math.round(r.width * img.height / img.width)));
+          sizeCanvas(h, rec.drawing, h);
+        }
       };
       img.src = rec.drawing;
     } else {
