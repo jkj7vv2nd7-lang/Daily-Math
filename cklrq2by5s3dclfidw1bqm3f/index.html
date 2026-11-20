@@ -57,22 +57,16 @@
     padding:16px; font-size:16.5px; white-space:pre-wrap; margin:10px 0;
   }
   .sec{font-size:13px; font-weight:700; color:var(--muted); letter-spacing:.06em; margin:18px 0 6px;}
-  .padbox{position:relative;}
-.canvaswrap{background:#fff; border:1.5px solid var(--line); border-radius:12px; overflow-x:auto; overflow-y:hidden; position:relative; scrollbar-width:thin;}
-.scrollstrip{position:absolute; top:24px; bottom:24px; width:24px; z-index:4; touch-action:pan-y; cursor:grab;
-  background-color:rgba(20,101,90,.07);
-  background-image:radial-gradient(circle, rgba(20,101,90,.5) 2.2px, transparent 2.7px);
-  background-size:24px 22px; background-position:center 8px; background-repeat:repeat-y;}
-.scrollstrip.left{left:0; border-right:1px dashed rgba(20,101,90,.35);}
-.scrollstrip.right{right:0; border-left:1px dashed rgba(20,101,90,.35);}
-.hstrip{position:absolute; left:0; height:24px; z-index:3; touch-action:pan-x pan-y; cursor:grab;
-  background-color:rgba(20,101,90,.07);
-  background-image:radial-gradient(circle, rgba(20,101,90,.5) 2.2px, transparent 2.7px);
-  background-size:22px 24px; background-position:8px center; background-repeat:repeat-x;}
-.hstrip.top{top:0; border-bottom:1px dashed rgba(20,101,90,.35);}
-.hstrip.bottom{bottom:0; border-top:1px dashed rgba(20,101,90,.35);}
-  canvas#draw{height:300px; display:block; touch-action:none; cursor:crosshair;
-    background-image:linear-gradient(#f3ecdc 1px, transparent 1px), linear-gradient(90deg, #f3ecdc 1px, transparent 1px); background-size:24px 24px;}
+  /* 手書きスペース（透明フィルム） */
+  #inkOverlay{position:fixed; inset:0; z-index:80; display:none; flex-direction:column;}
+  #inkOverlay.open{display:flex;}
+  .ink-head{background:var(--card); border-bottom:1px solid var(--line); padding:8px 10px;}
+  .ink-tools{display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:6px;}
+  .ink-dot{width:26px; height:26px; border-radius:50%; border:2px solid var(--line); padding:0; cursor:pointer; flex:none;}
+  .ink-dot.on{border-color:var(--teal); box-shadow:0 0 0 2px var(--teal);}
+  #inkScroll{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; background:rgba(253,250,240,.9);}
+  canvas#inkCanvas{display:block; touch-action:none; cursor:crosshair;
+    background-image:linear-gradient(rgba(20,101,90,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(20,101,90,.06) 1px, transparent 1px); background-size:24px 24px;}
   .tools{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
   .spacenote{font-size:12.5px; color:var(--muted); margin-top:6px;}
   .samplebanner{background:#fdf6e3; border:1.5px solid var(--gold); border-radius:12px; padding:12px 14px; font-size:14px; line-height:1.75; margin-bottom:12px;}
@@ -195,18 +189,9 @@
     <h2 class="ptitle" id="pTitle"></h2>
     <div class="prob" id="pProb"></div>
 
-    <div class="sec">✏️ 解答スペース（指やペンで手書きできます。端まで書くと自動で広がります。点々の帯は、触って動かすための場所です）</div>
-    <div class="padbox"><div class="canvaswrap"><canvas id="draw"></canvas><div class="hstrip top" title="左右へ移動（書けません）"></div><div class="hstrip bottom" title="左右へ移動（書けません）"></div></div><div class="scrollstrip left" title="スクロール用（書けません）"></div><div class="scrollstrip right" title="スクロール用（書けません）"></div></div>
-    <div class="tools">
-      <button class="tbtn on" id="penBtn">✒️ ペン</button>
-      <button class="tbtn" id="eraserBtn">🧽 消しゴム</button>
-      <button class="tbtn" id="undoBtn">↩️ 元に戻す</button>
-      <button class="tbtn" id="clearBtn">🗑 全消し</button>
-      <button class="tbtn" id="extendBtn">⬇ スペースを広げる</button>
-      <button class="tbtn" id="stripSideBtn">↔ スクロール帯：右</button>
-      <button class="tbtn" id="homeBtn">⌖ 書き始めに戻る</button>
-    </div>
-    <div class="spacenote hidden" id="spaceNote">スペースはここまでです（いちばん下まで広げました）。</div>
+    <div class="sec">✏️ 解答スペース</div>
+    <button class="tbtn" id="inkOpenBtn" style="font-size:15px; padding:11px 14px;" onclick="openInk()">✍️ 手書きスペースを開く</button>
+    <div class="spacenote">問題の上に透明な膜をかぶせて、そのまま手書きできます。スペースは下へ広げられます。書き込みは問題ごとにこの端末へ保存されます。</div>
 
     <div id="answerArea">
       <div class="sec">🔢 答えの入力（自動判定）</div>
@@ -231,6 +216,30 @@
     </div>
   </section>
 
+<div id="inkOverlay" aria-hidden="true">
+  <div class="ink-head">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <b id="inkTitle">✍️ 手書きスペース</b>
+      <button class="tbtn" style="background:var(--teal);color:#fff;border-color:var(--teal);font-weight:700" onclick="closeInk()">✓ 終わる</button>
+    </div>
+    <div class="ink-tools">
+      <button class="tbtn" id="inkModePen" onclick="inkSetMode('pen')">✏️ 書く</button>
+      <button class="tbtn" id="inkModeErase" onclick="inkSetMode('erase')">🧽 消しゴム</button>
+      <button class="tbtn" id="inkModeMove" onclick="inkSetMode('move')">✋ 移動</button>
+      <span style="width:4px"></span>
+      <button class="ink-dot" data-c="#173f42" style="background:#173f42" onclick="inkSetColor('#173f42')" aria-label="濃い緑"></button>
+      <button class="ink-dot" data-c="#2456c8" style="background:#2456c8" onclick="inkSetColor('#2456c8')" aria-label="青"></button>
+      <button class="ink-dot" data-c="#d23b2e" style="background:#d23b2e" onclick="inkSetColor('#d23b2e')" aria-label="赤"></button>
+      <span style="width:4px"></span>
+      <button class="tbtn" onclick="inkUndo()">↩ 1画もどる</button>
+      <button class="tbtn" onclick="inkClear()">全部消す</button>
+      <button class="tbtn" onclick="inkExpand()">↓ スペースを広げる</button>
+      <button class="tbtn" onclick="inkExport()">🖼 画像として保存</button>
+    </div>
+    <p class="spacenote" style="margin:6px 0 0">下の問題がうっすら見えます。「✋ 移動」にするとスクロールできます。書いたものはこの問題用に自動で保存されます。</p>
+  </div>
+  <div id="inkScroll"><canvas id="inkCanvas"></canvas></div>
+</div>
   <p class="notice">問題は毎月分をまとめて収録しています。手書きの解答・採点の記録はこの端末の中に保存されます。</p>
 </div>
 
@@ -571,155 +580,182 @@ document.getElementById("tabDay").onclick = ()=> switchView("day");
 document.getElementById("tabCal").onclick = ()=> switchView("cal");
 document.getElementById("backToDay").onclick = ()=>{ switchView("day"); renderDay(); };
 
-/* ============ 問題ビュー ============ */
-const canvas = document.getElementById("draw");
-const ctx = canvas.getContext("2d");
-let drawing = false, lastPt = null, tool = "pen", undoStack = [];
-/* 解答スペースは下へ伸びる方式：初期300px、書くほどに自動で広がり、上限1800px */
-const CANVAS_MIN = 300, CANVAS_MAX = 1800;
-let canvasH = CANVAS_MIN;
-let canvasW = 0;   /* 解答スペースの横幅（CSS px）。最初は表示幅、左右へ自動拡張する */
-let originX = 0;   /* 左へ広げた累計（CSS px）＝書き始め位置 */
-const wrapEl = canvas.parentElement;
-function viewW(){ return wrapEl.clientWidth || 360; }
-function maxCanvasW(){ return Math.round(viewW() * 3); }
-function sizeCanvasWH(cssW, cssH, keepImg, keepCssW, keepCssH, keepDX, onDone){
-  const dpr = window.devicePixelRatio || 1;
-  canvasW = Math.max(viewW(), Math.min(maxCanvasW(), Math.round(cssW)));
-  canvasH = Math.max(CANVAS_MIN, Math.min(CANVAS_MAX, Math.round(cssH)));
-  canvas.style.width = canvasW + "px";
-  canvas.style.height = canvasH + "px";
-  canvas.width = Math.round(canvasW * dpr);
-  canvas.height = Math.round(canvasH * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.lineCap = "round"; ctx.lineJoin = "round";
-  document.querySelectorAll(".hstrip").forEach(el => { el.style.width = canvasW + "px"; });
-  document.getElementById("spaceNote").classList.toggle("hidden", canvasH < CANVAS_MAX);
-  if(keepImg){
-    const img = new Image();
-    img.onload = ()=>{ ctx.drawImage(img, keepDX || 0, 0, keepCssW || canvasW, keepCssH || canvasH); if(onDone) onDone(); };
-    img.src = keepImg;
-  } else if(onDone) onDone();
-}
-function sizeCanvas(cssH, keepImg, keepCssH, onDone){
-  sizeCanvasWH(canvasW || viewW(), cssH, keepImg, canvasW || viewW(), keepCssH, 0, onDone);
-}
-function fitCanvas(restore){
-  canvasW = viewW(); originX = 0; wrapEl.scrollLeft = 0;
-  sizeCanvasWH(canvasW, CANVAS_MIN, restore ? canvas.toDataURL() : null, canvasW, CANVAS_MIN, 0);
-}
-function extendCanvas(){
-  if(canvasH >= CANVAS_MAX){
-    document.getElementById("spaceNote").classList.remove("hidden");
-    return false;
-  }
-  const step = Math.max(240, Math.round(window.innerHeight * 0.6));
-  const keep = canvas.toDataURL();
-  const oldH = canvasH;
-  sizeCanvasWH(canvasW, canvasH + step, keep, canvasW, oldH, 0);
-  /* 広がった分が見えるよう、キャンバスの下端が画面内に来るまでなめらかにスクロール */
-  requestAnimationFrame(()=>{
-    const r = canvas.getBoundingClientRect();
-    if(r.bottom > window.innerHeight) window.scrollBy({ top: r.bottom - window.innerHeight + 90, behavior: "smooth" });
-  });
-  return true;
-}
-/* 左右への自動拡張。左へ広げるときは既存の筆跡が画面上でずれないよう、座標と表示位置をずらす */
-function extendSide(dir){
-  const room = maxCanvasW() - canvasW;
-  if(room <= 0) return 0;
-  const add = Math.min(Math.round(viewW() * 0.6), room);
-  const keep = canvas.toDataURL();
-  const oldW = canvasW, oldH = canvasH;
-  if(dir === "left"){
-    originX += add;
-    sizeCanvasWH(canvasW + add, canvasH, keep, oldW, oldH, add);
-    wrapEl.scrollLeft += add;
-    return add;
-  }
-  sizeCanvasWH(canvasW + add, canvasH, keep, oldW, oldH, 0);
-  return add;
-}
-function canvasPos(e){
-  const r = canvas.getBoundingClientRect();
-  return { x: e.clientX - r.left, y: e.clientY - r.top };
-}
-function pushUndo(){
-  undoStack.push({ url: canvas.toDataURL(), h: canvasH, w: canvasW, ox: originX });
-  if(undoStack.length > 25) undoStack.shift();
-}
-function saveDrawing(){
+/* ============ 手書きスペース（透明フィルム） ============ */
+/* 問題の上に半透明の膜をかぶせ、透けて見える問題を見ながら手書きする。
+   書き込みは問題ごと（月×カテゴリ×日）に rec.ink（線のデータ）として端末へ保存する。
+   旧形式の保存画像（rec.drawing）がある場合は、膜の背景として表示する。 */
+let ink = { strokes:[], bgImg:null, height:0, mode:"pen", color:"#173f42", width:2.6, drawing:false, cur:null };
+function inkCanvas(){ return document.getElementById("inkCanvas"); }
+function inkCtx(){ return inkCanvas().getContext("2d"); }
+function inkDpr(){ return Math.min(window.devicePixelRatio||1, 2); }
+function inkRec(){ return getRec(curMonth, curCat, curDay); }
+function openInk(){
   if(!curProb) return;
-  const rec = getRec(curMonth, curCat, curDay);
-  try{
-    const tmp = document.createElement("canvas");
-    const scale = Math.min(1, 800 / canvas.width, 1500 / canvas.height);
-    tmp.width = Math.round(canvas.width * scale);
-    tmp.height = Math.round(canvas.height * scale);
-    const tctx = tmp.getContext("2d");
-    tctx.fillStyle = "#ffffff"; tctx.fillRect(0, 0, tmp.width, tmp.height);
-    tctx.drawImage(canvas, 0, 0, tmp.width, tmp.height);
-    rec.drawing = tmp.toDataURL("image/jpeg", 0.62);
-    rec.cw = canvasW; rec.ch = canvasH; rec.ox = originX;
-  }catch(e){ rec.drawing = null; }
-  save();
+  const rec = inkRec();
+  ink.strokes = (rec.ink && Array.isArray(rec.ink.strokes)) ? JSON.parse(JSON.stringify(rec.ink.strokes)) : [];
+  ink.height = (rec.ink && rec.ink.h) ? rec.ink.h : Math.round(window.innerHeight*1.8);
+  ink.bgImg = null;
+  if(rec.drawing){
+    const im = new Image();
+    im.onload = ()=>{
+      ink.bgImg = im;
+      const w = inkCanvas().clientWidth || window.innerWidth;
+      const need = Math.round(im.naturalHeight * (w / Math.max(1, im.naturalWidth))) + 40;
+      if(need > ink.height){ ink.height = need; inkResize(); }
+      inkRedraw();
+    };
+    im.src = rec.drawing;
+  }
+  document.getElementById("inkTitle").textContent = "✍️ 手書きスペース（" + fmtDate(curMonth, curDay) + "）";
+  document.getElementById("inkOverlay").classList.add("open");
+  document.body.style.overflow = "hidden";
+  inkSetColor("#173f42"); inkSetMode("pen");
+  requestAnimationFrame(()=>{ inkResize(); inkRedraw(); document.getElementById("inkScroll").scrollTop = 0; });
 }
-canvas.addEventListener("pointerdown", e=>{
-  e.preventDefault();
-  canvas.setPointerCapture(e.pointerId);
-  pushUndo();
-  drawing = true; lastPt = canvasPos(e);
-  ctx.beginPath(); ctx.moveTo(lastPt.x, lastPt.y);
-  ctx.lineTo(lastPt.x + 0.1, lastPt.y + 0.1);
-  ctx.strokeStyle = tool === "pen" ? "#173f42" : "#ffffff";
-  ctx.lineWidth = tool === "pen" ? 2.6 : 16;
-  ctx.stroke();
-});
-canvas.addEventListener("pointermove", e=>{
-  if(!drawing) return;
-  e.preventDefault();
-  const pt = canvasPos(e);
-  ctx.beginPath(); ctx.moveTo(lastPt.x, lastPt.y); ctx.lineTo(pt.x, pt.y);
-  ctx.strokeStyle = tool === "pen" ? "#173f42" : "#ffffff";
-  ctx.lineWidth = tool === "pen" ? 2.6 : 16;
-  ctx.stroke();
-  lastPt = pt;
-  /* 筆跡が下端に近づいたら、スペースを下へ広げる */
-  if(pt.y > canvasH - 48) extendCanvas();
-  /* 筆跡が左右の端に近づいたら、スペースを横へ広げる（左は筆跡がずれないよう座標をずらす） */
-  if(pt.x > canvasW - 48) extendSide("right");
-  else if(pt.x < 48){ const added = extendSide("left"); if(added) lastPt.x += added; }
-});
-["pointerup", "pointercancel"].forEach(ev => canvas.addEventListener(ev, ()=>{ if(drawing){ drawing = false; saveDrawing(); } }));
-document.getElementById("penBtn").onclick = ()=>{ tool = "pen"; document.getElementById("penBtn").classList.add("on"); document.getElementById("eraserBtn").classList.remove("on"); };
-document.getElementById("eraserBtn").onclick = ()=>{ tool = "eraser"; document.getElementById("eraserBtn").classList.add("on"); document.getElementById("penBtn").classList.remove("on"); };
-document.getElementById("undoBtn").onclick = ()=>{
-  const prev = undoStack.pop();
-  if(!prev) return;
-  originX = prev.ox || 0;
-  sizeCanvasWH(prev.w || viewW(), prev.h, prev.url, prev.w || viewW(), prev.h, 0, saveDrawing);
-  wrapEl.scrollLeft = originX;
-};
-document.getElementById("clearBtn").onclick = ()=>{
-  pushUndo();
-  const r = canvas.getBoundingClientRect();
-  ctx.clearRect(0, 0, r.width, canvasH);
-  saveDrawing();
-};
-document.getElementById("extendBtn").onclick = ()=>{ extendCanvas(); };
-document.getElementById("homeBtn").onclick = ()=>{ wrapEl.scrollTo({ left: originX, behavior: "smooth" }); };
-/* スクロール帯は片側だけ。付ける側は保存され、ボタンで切り替える */
-let stripSide = store.stripSide === "left" ? "left" : "right";
-function applyStripSide(){
-  document.querySelector(".scrollstrip.left").style.display = stripSide === "left" ? "block" : "none";
-  document.querySelector(".scrollstrip.right").style.display = stripSide === "right" ? "block" : "none";
-  document.getElementById("stripSideBtn").textContent = "↔ スクロール帯：" + (stripSide === "right" ? "右" : "左");
+function inkSave(){
+  if(!curProb) return;
+  const rec = inkRec();
+  if(ink.strokes.length) rec.ink = { strokes: ink.strokes, h: ink.height };
+  else delete rec.ink;
+  save(); inkSyncBtn();
 }
-applyStripSide();
-document.getElementById("stripSideBtn").onclick = ()=>{
-  stripSide = stripSide === "right" ? "left" : "right";
-  store.stripSide = stripSide; save(); applyStripSide();
-};
+function inkSyncBtn(){
+  const rec = curProb ? inkRec() : null;
+  const has = !!(rec && ((rec.ink && rec.ink.strokes && rec.ink.strokes.length) || rec.drawing));
+  const b = document.getElementById("inkOpenBtn");
+  if(b) b.textContent = "✍️ 手書きスペースを開く" + (has ? "（書き込みあり）" : "");
+}
+function closeInk(){
+  inkSave();
+  document.getElementById("inkOverlay").classList.remove("open");
+  document.body.style.overflow = "";
+}
+function inkSetMode(m){
+  ink.mode = m;
+  document.getElementById("inkModePen").classList.toggle("on", m==="pen");
+  document.getElementById("inkModeErase").classList.toggle("on", m==="erase");
+  document.getElementById("inkModeMove").classList.toggle("on", m==="move");
+  inkCanvas().style.touchAction = (m==="move") ? "pan-y" : "none";
+}
+function inkSetColor(c){
+  ink.color = c;
+  document.querySelectorAll(".ink-dot").forEach(b=>b.classList.toggle("on", b.dataset.c===c));
+  if(ink.mode==="erase") inkSetMode("pen");
+}
+function inkResize(){
+  const cv = inkCanvas(); if(!cv) return;
+  const w = document.getElementById("inkScroll").clientWidth || window.innerWidth;
+  const dpr = inkDpr();
+  cv.style.width = w + "px"; cv.style.height = ink.height + "px";
+  cv.width = Math.round(w*dpr); cv.height = Math.round(ink.height*dpr);
+  inkCtx().setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function inkStrokePath(x, st){
+  x.strokeStyle = st.c; x.fillStyle = st.c; x.lineWidth = st.w; x.lineCap = "round"; x.lineJoin = "round";
+  if(st.pts.length === 1){ x.beginPath(); x.arc(st.pts[0][0], st.pts[0][1], st.w/2, 0, Math.PI*2); x.fill(); return; }
+  x.beginPath(); x.moveTo(st.pts[0][0], st.pts[0][1]);
+  for(let k=1; k<st.pts.length; k++) x.lineTo(st.pts[k][0], st.pts[k][1]);
+  x.stroke();
+}
+function inkDrawBg(x, w){
+  if(!ink.bgImg) return;
+  const h = ink.bgImg.naturalHeight * (w / Math.max(1, ink.bgImg.naturalWidth));
+  x.drawImage(ink.bgImg, 0, 0, w, h);
+}
+function inkRedraw(){
+  const cv = inkCanvas(); if(!cv) return;
+  const x = inkCtx(); const dpr = inkDpr();
+  x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const w = cv.clientWidth || window.innerWidth;
+  x.clearRect(0, 0, w, ink.height);
+  inkDrawBg(x, w);
+  ink.strokes.forEach(st=>inkStrokePath(x, st));
+}
+function inkPos(e){
+  const r = inkCanvas().getBoundingClientRect();
+  return [ Math.round((e.clientX - r.left)*10)/10, Math.round((e.clientY - r.top)*10)/10 ];
+}
+function inkSeg(a, b){
+  const x = inkCtx();
+  x.strokeStyle = ink.color; x.fillStyle = ink.color; x.lineWidth = ink.width; x.lineCap = "round"; x.lineJoin = "round";
+  x.beginPath();
+  if(a[0]===b[0] && a[1]===b[1]){ x.arc(a[0], a[1], ink.width/2, 0, Math.PI*2); x.fill(); return; }
+  x.moveTo(a[0], a[1]); x.lineTo(b[0], b[1]); x.stroke();
+}
+function inkEraseAt(p){
+  const R = 16; let changed = false;
+  ink.strokes = ink.strokes.filter(st=>{
+    const hit = st.pts.some(q=>{ const dx=q[0]-p[0], dy=q[1]-p[1]; return dx*dx + dy*dy < R*R; });
+    if(hit) changed = true;
+    return !hit;
+  });
+  if(changed){ inkRedraw(); inkSave(); }
+}
+function inkUndo(){ if(ink.strokes.length){ ink.strokes.pop(); inkRedraw(); inkSave(); } }
+function inkClear(){
+  if(!curProb) return;
+  const rec = inkRec();
+  const hasBg = !!rec.drawing;
+  if(!ink.strokes.length && !hasBg) return;
+  if(!confirm(hasBg ? "この問題の書き込みを全部消しますか？（前の形式で保存された分も消えます）" : "この問題の書き込みを全部消しますか？")) return;
+  ink.strokes = []; ink.bgImg = null;
+  if(hasBg){ rec.drawing = null; delete rec.cw; delete rec.ch; delete rec.ox; }
+  inkRedraw(); inkSave();
+}
+function inkExpand(){
+  ink.height += Math.round(window.innerHeight*0.9);
+  inkResize(); inkRedraw(); inkSave();
+  const sc = document.getElementById("inkScroll");
+  sc.scrollTop = Math.max(0, ink.height - sc.clientHeight - Math.round(window.innerHeight*0.25));
+}
+function inkExport(){
+  const scale = Math.min(1, 7000/Math.max(ink.height, 1));
+  const w = inkCanvas().clientWidth || window.innerWidth;
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w*scale)); c.height = Math.max(1, Math.round(ink.height*scale));
+  const x = c.getContext("2d");
+  x.fillStyle = "#fffdf6"; x.fillRect(0, 0, c.width, c.height);
+  x.scale(scale, scale);
+  inkDrawBg(x, w);
+  ink.strokes.forEach(st=>inkStrokePath(x, st));
+  c.toBlob(async blob=>{
+    if(!blob) return;
+    const name = "himekuri-note.png";
+    const file = new File([blob], name, { type: "image/png" });
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      try{ await navigator.share({ files: [file] }); return; }catch(e){}
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+  }, "image/png");
+}
+(function initInk(){
+  const cv = inkCanvas(); if(!cv) return;
+  cv.addEventListener("pointerdown", e=>{
+    if(ink.mode==="move") return;
+    e.preventDefault();
+    try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+    const p = inkPos(e);
+    if(ink.mode==="erase"){ inkEraseAt(p); return; }
+    ink.drawing = true;
+    ink.cur = { c: ink.color, w: ink.width, pts: [p] };
+    inkSeg(p, p);
+  });
+  cv.addEventListener("pointermove", e=>{
+    if(ink.mode==="move") return;
+    if(ink.mode==="erase"){ if(e.buttons) inkEraseAt(inkPos(e)); return; }
+    if(!ink.drawing || !ink.cur) return;
+    const p = inkPos(e);
+    const last = ink.cur.pts[ink.cur.pts.length-1];
+    const dx = p[0]-last[0], dy = p[1]-last[1];
+    if(dx*dx + dy*dy < 4) return;
+    ink.cur.pts.push(p); inkSeg(last, p);
+  });
+  const end = ()=>{ if(ink.drawing && ink.cur){ ink.strokes.push(ink.cur); inkSave(); } ink.drawing = false; ink.cur = null; };
+  cv.addEventListener("pointerup", end);
+  cv.addEventListener("pointercancel", end);
+})();
 
 function normAns(s){
   if(s == null) return "";
@@ -761,29 +797,8 @@ function openProblem(catKey){
   const jm = document.getElementById("judgeMsg");
   jm.textContent = rec.judged === true ? "判定：正解でした ◎" : "";
   jm.className = "judgemsg" + (rec.judged === true ? " ok" : "");
-  undoStack = [];
   switchView("prob");
-  requestAnimationFrame(()=>{
-    if(rec.drawing){
-      const r = canvas.getBoundingClientRect();
-      const img = new Image();
-      img.onload = ()=>{
-        if(rec.cw){
-          /* 保存時の幅・高さ・書き始め位置をそのまま復元する */
-          sizeCanvasWH(rec.cw, rec.ch || CANVAS_MIN, rec.drawing, rec.cw, rec.ch || CANVAS_MIN, 0);
-          originX = rec.ox || 0;
-          requestAnimationFrame(()=>{ wrapEl.scrollLeft = originX; });
-        } else {
-          /* 保存画像の縦横比から、書いたときの高さを復元する（つぶさない） */
-          const h = Math.max(CANVAS_MIN, Math.min(CANVAS_MAX, Math.round(r.width * img.height / img.width)));
-          sizeCanvas(h, rec.drawing, h);
-        }
-      };
-      img.src = rec.drawing;
-    } else {
-      fitCanvas(false);
-    }
-  });
+  inkSyncBtn();
   refreshMarkBtns();
 }
 document.getElementById("judgeBtn").onclick = ()=>{
